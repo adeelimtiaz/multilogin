@@ -1,125 +1,153 @@
-var e, h = 6,
-    k, m = null,
-    n;
-try {
-    k = chrome.runtime.connect({
-        name: "3"
-    }), k.onMessage.addListener(function(a) {
-        4 == a.type && ("undefined" == a.profile && window.location.reload(), p(a.profile))
-    }), k.postMessage({
-        type: "3"
-    }), k.onDisconnect.addListener(function() {})
-} catch (q) {}
-if (!k) {
-    throw "port not found"
-}
-r();
+let port, profilePrefix = null, shortPrefix;
 
-function s() {
-    var titleScript = `
-        (function() {
-            var ____t = document.title;
-            var ce = CustomEvent;
+try {
+    port = chrome.runtime.connect({ name: "3" });
+    port.onMessage.addListener((msg) => {
+        if (msg.type === 4) {
+            if (typeof msg.profile === "undefined") {
+                window.location.reload();
+            } else {
+                setProfile(msg.profile);
+            }
+        }
+    });
+    port.postMessage({ type: "3" });
+} catch (e) {
+    console.error("Port connection failed:", e);
+    throw "port not found";
+}
+
+injectCookieHijack();
+injectTitleHijack();
+
+function injectTitleHijack() {
+    const script = document.createElement("script");
+    script.textContent = `
+        (() => {
+            let originalTitle = document.title;
+            const event = CustomEvent;
+
             document.__defineSetter__("title", function(t) {
-                ____t = t;
-                var e = new ce("9", {
-                    "detail": t
-                });
-                document.dispatchEvent(e)
+                originalTitle = t;
+                document.dispatchEvent(new event("9", { detail: t }));
             });
+
             document.__defineGetter__("title", function() {
-                return ____t
+                return originalTitle;
             });
-        })()`;
-    var b = document.createElement("script");
-    b.appendChild(document.createTextNode(titleScript));
-    (document.head || document.documentElement).appendChild(b);
-    b.parentNode.removeChild(b)
+        })();
+    `;
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
 }
-function r() {
-    var cookieScript = `
-        (function() {
-            var ce = CustomEvent;
+
+function injectCookieHijack() {
+    const script = document.createElement("script");
+    script.textContent = `
+        (() => {
+            const event = CustomEvent;
+
             document.__defineSetter__("cookie", function(c) {
-                var event = new ce("7", {
-                    "detail": c
-                });
-                document.dispatchEvent(event)
+                document.dispatchEvent(new event("7", { detail: c }));
             });
+
             document.__defineGetter__("cookie", function() {
-                var event = new ce("8");
-                document.dispatchEvent(event);
-                var c;
+                document.dispatchEvent(new event("8"));
+                let result;
                 try {
-                    c = localStorage.getItem("@@@cookies");
-                    localStorage.removeItem("@@@cookies")
+                    result = localStorage.getItem("@@@cookies");
+                    localStorage.removeItem("@@@cookies");
                 } catch (e) {
-                    c = document.getElementById("@@@cookies").innerText
+                    result = document.getElementById("@@@cookies")?.innerText || "";
                 }
-                return c
-            })
-        })()`;
-    var b = document.createElement("script");
-    b.appendChild(document.createTextNode(cookieScript));
-    (document.head || document.documentElement).appendChild(b);
-    b.parentNode.removeChild(b)
+                return result;
+            });
+        })();
+    `;
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
 }
-function p(a) {
-    null !== a && (m = a, n = m.substr(0, m.indexOf("_@@@_")))
-}
-function t() {
-    if (null === m) {
-        e = new XMLHttpRequest;
-        e.open("GET", "https://translate.googleapis.com/translate_static/img/loading.gif", !1);
-        e.send();
-        var a = e.getResponseHeader(h);
-        null !== a && p(a)
+
+function setProfile(profile) {
+    if (profile !== null) {
+        profilePrefix = profile;
+        shortPrefix = profilePrefix.split("_@@@_")[0];
     }
 }
-document.addEventListener(7, function(a) {
-    a = a.detail;
-    t();
-    document.cookie = null === m ? a : m + a.trim()
+
+function ensureProfile() {
+    if (profilePrefix === null) {
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", "https://translate.googleapis.com/translate_static/img/loading.gif", false);
+        xhr.send();
+        const header = xhr.getResponseHeader("6");
+        if (header !== null) setProfile(header);
+    }
+}
+
+// Listen for cookie set
+document.addEventListener("7", (event) => {
+    ensureProfile();
+    const raw = event.detail;
+    document.cookie = profilePrefix === null ? raw : profilePrefix + raw.trim();
 });
-document.addEventListener(8, function() {
-    t();
-    var a;
-    var b = document.cookie;
-    a = "";
-    if (b) {
-        var b = b.split("; "),
-            f;
-        for (f in b) {
-            if (m) {
-                if (b[f].substring(0, m.length) != m) {
-                    continue
-                }
-            } else {
-                if (-1 < b[f].indexOf("_@@@_")) {
-                    continue
-                }
-            }
-            a && (a += "; ");
-            a += m ? b[f].substring(m.length) : b[f]
+
+// Listen for cookie get
+document.addEventListener("8", () => {
+    ensureProfile();
+    const cookies = document.cookie.split("; ");
+    let result = "";
+
+    for (const cookie of cookies) {
+        if (profilePrefix) {
+            if (!cookie.startsWith(profilePrefix)) continue;
+            result += (result ? "; " : "") + cookie.substring(profilePrefix.length);
+        } else {
+            if (cookie.includes("_@@@_")) continue;
+            result += (result ? "; " : "") + cookie;
         }
     }
+
     try {
-        localStorage.setItem("@@@cookies", a)
-    } catch (v) {
-        document.getElementById("@@@cookies") || (f = document.createElement("div"), f.setAttribute("id", "@@@cookies"), document.documentElement.appendChild(f), f.style.display = "none"), document.getElementById("@@@cookies").a = a
+        localStorage.setItem("@@@cookies", result);
+    } catch (e) {
+        let store = document.getElementById("@@@cookies");
+        if (!store) {
+            store = document.createElement("div");
+            store.id = "@@@cookies";
+            store.style.display = "none";
+            document.documentElement.appendChild(store);
+        }
+        store.innerText = result;
     }
 });
-document.addEventListener(9, function(a) {
-    u(a.detail)
+
+// Listen for title change
+document.addEventListener("9", (e) => {
+    updateTitle(e.detail);
 });
 
-function u(a) {
-    n ? a.substr(0, n.length + 2) != "[" + n + "]" && (document.title = "[" + n + "] " + a + " [" + n + "]") : document.title = a
+function updateTitle(t) {
+    if (shortPrefix) {
+        if (!t.startsWith("[" + shortPrefix + "]")) {
+            document.title = `[${shortPrefix}] ${t} [${shortPrefix}]`;
+        }
+    } else {
+        document.title = t;
+    }
 }
-chrome.runtime.onMessage.addListener(function(a) {
-    5 == a.type && (s(), u(document.title));
-    "3" == a.type && (p(""), document.title = document.title.replace(/\s*\[\d*\]\s*/g, ""))
+
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 5) {
+        injectTitleHijack();
+        updateTitle(document.title);
+    }
+    if (msg.type === "3") {
+        setProfile("");
+        document.title = document.title.replace(/\s*\[\d*\]\s*/g, "");
+    }
 });
-window.onunload = function() {
-    document.title = document.title.replace(/\s*\[\d*\]\s*/g, "")
-};
+
+window.addEventListener("unload", () => {
+    document.title = document.title.replace(/\s*\[\d*\]\s*/g, "");
+});
