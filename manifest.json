@@ -1,41 +1,40 @@
 {
-   "background":{
-      "page":"background.html"
-   },
-   "browser_action":{
-      "default_icon":"icon_128.png",
-      "default_title":"New Identity"
-   },
-   "content_scripts":[
-      {
-         "all_frames":true,
-         "js":[
-            "content.js"
-         ],
-         "matches":[
-            "http://*/*",
-            "https://*/*"
-         ],
-         "run_at":"document_start"
-      }
-   ],
-   "content_security_policy":"script-src 'self'  'unsafe-eval' ; object-src 'self'",
-   "description":"Log into multiple accounts on the same site simultaneously.",
-   "icons":{
-      "128":"icon_128.png"
-   }, 
-   "manifest_version":2,
-   "name":"Multi Login",
-   "permissions":[
-      "contextMenus",
-      "cookies",
-      "storage",
-      "tabs",
-      "http://*/*",
-      "https://*/*",
-      "webRequest",
-      "webRequestBlocking",
-      "webNavigation"
-   ],
-   "version":"1.0"
+  "manifest_version": 3,
+  "name": "Multi Login",
+  "version": "1.0",
+  "description": "Log into multiple accounts on the same site simultaneously.",
+  "action": {
+    "default_icon": "icon_128.png",
+    "default_title": "New Identity"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "all_frames": true,
+      "js": ["content.js"],
+      "matches": ["http://*/*", "https://*/*"],
+      "run_at": "document_start"
+    }
+  ],
+  "permissions": [
+    "contextMenus",
+    "cookies",
+    "storage",
+    "tabs",
+    "webRequest",
+    "webRequestBlocking",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "icons": {
+    "128": "icon_128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
 }
