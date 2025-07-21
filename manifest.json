@@ -19,13 +19,14 @@
       "run_at": "document_start"
     }
   ],
-  "permissions": [
+   "permissions": [
     "contextMenus",
     "cookies",
     "storage",
     "tabs",
-    "scripting"
-  ],
+    "scripting",
+    "webNavigation"
+   ],
   "host_permissions": [
     "http://*/*",
     "https://*/*"
