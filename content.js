@@ -1,20 +1,59 @@
 // content.js
 
-let port = chrome.runtime.connect({ name: "3" });
+let port;
 let profilePrefix = null;
 let shortPrefix = null;
 
-port.onMessage.addListener((msg) => {
-  if (msg.type === 4) {
-    if (!msg.profile) {
-      window.location.reload();
-    } else {
-      setProfile(msg.profile);
+try {
+  port = chrome.runtime.connect({ name: "profileConnection" });
+  
+  // Handle disconnection errors
+  port.onDisconnect.addListener((p) => {
+    if (chrome.runtime.lastError) {
+      console.error("Connection error:", chrome.runtime.lastError);
     }
-  }
-});
+    // Attempt to reconnect after a short delay
+    setTimeout(() => {
+      try {
+        port = chrome.runtime.connect({ name: "profileConnection" });
+        port.postMessage({ type: MESSAGE_TYPES.REQUEST_PROFILE });
+      } catch (e) {
+        console.error("Failed to reconnect:", e);
+      }
+    }, 1000);
+  });
+} catch (e) {
+  console.error("Failed to establish connection:", e);
+  // Set default values to allow minimal functionality
+  profilePrefix = "";
+  shortPrefix = "";
+}
 
-port.postMessage({ type: 3 });
+// Define message type constants for better readability
+const MESSAGE_TYPES = {
+  REQUEST_PROFILE: 3,
+  PROFILE_RESPONSE: 4,
+  UPDATE_TITLE: 5,
+  RESET_PROFILE: "3"
+};
+
+if (port) {
+  port.onMessage.addListener((msg) => {
+    if (msg && msg.type === MESSAGE_TYPES.PROFILE_RESPONSE) {
+      if (!msg.profile) {
+        window.location.reload();
+      } else {
+        setProfile(msg.profile);
+      }
+    }
+  });
+
+  try {
+    port.postMessage({ type: MESSAGE_TYPES.REQUEST_PROFILE });
+  } catch (e) {
+    console.error("Failed to send initial profile request:", e);
+  }
+}
 
 chrome.runtime.sendMessage({ type: "inject_cookie_script" });
 
@@ -25,17 +64,45 @@ function setProfile(profile) {
 
 function ensureProfile() {
   if (!profilePrefix) {
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET", "https://translate.googleapis.com/translate_static/img/loading.gif", false);
-    xhr.send();
-    const header = xhr.getResponseHeader("6");
-    if (header) setProfile(header);
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", "https://translate.googleapis.com/translate_static/img/loading.gif", false);
+      xhr.send();
+      const PROFILE_HEADER_NAME = "6";
+      const header = xhr.getResponseHeader(PROFILE_HEADER_NAME);
+      if (header) setProfile(header);
+    } catch (error) {
+      console.error("Failed to ensure profile:", error);
+      // Fallback to default behavior
+      if (!profilePrefix) profilePrefix = "";
+      if (!shortPrefix) shortPrefix = "";
+    }
   }
 }
 
-document.addEventListener("7", (event) => {
+// Define event name constants for better readability
+const EVENTS = {
+  SET_COOKIE: "7",
+  GET_COOKIES: "8",
+  SET_TITLE: "9"
+};
+
+document.addEventListener(EVENTS.SET_COOKIE, (event) => {
+  // Verify the event is from a trusted source
+  if (!event.isTrusted) {
+    console.error("Unauthorized cookie modification attempt");
+    return;
+  }
+  
   ensureProfile();
   const raw = event.detail;
+  
+  // Validate cookie data format before processing
+  if (!raw || typeof raw !== 'string' || !raw.includes('=')) {
+    console.error("Invalid cookie format");
+    return;
+  }
+  
   document.cookie = profilePrefix ? profilePrefix + raw.trim() : raw;
   chrome.runtime.sendMessage({
     type: "storeCookies",
@@ -43,7 +110,13 @@ document.addEventListener("7", (event) => {
   });
 });
 
-document.addEventListener("8", () => {
+document.addEventListener(EVENTS.GET_COOKIES, (event) => {
+  // Verify the event is from a trusted source
+  if (!event.isTrusted) {
+    console.error("Unauthorized cookie access attempt");
+    return;
+  }
+  
   ensureProfile();
   const cookies = document.cookie.split("; ");
   let result = "";
@@ -68,7 +141,13 @@ document.addEventListener("8", () => {
   }
 });
 
-document.addEventListener("9", (e) => {
+document.addEventListener(EVENTS.SET_TITLE, (e) => {
+  // Verify the event is from a trusted source
+  if (!e.isTrusted) {
+    console.error("Unauthorized title update attempt");
+    return;
+  }
+  
   updateTitle(e.detail);
 });
 
@@ -80,11 +159,17 @@ function updateTitle(t) {
   }
 }
 
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 5) {
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  // Verify the message is from a valid extension source
+  if (!sender || !sender.id || sender.id !== chrome.runtime.id) {
+    console.error("Unauthorized message received");
+    return;
+  }
+  
+  if (msg.type === MESSAGE_TYPES.UPDATE_TITLE) {
     updateTitle(document.title);
   }
-  if (msg.type === "3") {
+  if (msg.type === MESSAGE_TYPES.RESET_PROFILE) {
     setProfile("");
     document.title = document.title.replace(/\s*\[\d*\]\s*/g, "");
   }
