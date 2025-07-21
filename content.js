@@ -1,3 +1,5 @@
+// content.js
+
 let port = chrome.runtime.connect({ name: "3" });
 let profilePrefix = null;
 let shortPrefix = null;
@@ -14,52 +16,7 @@ port.onMessage.addListener((msg) => {
 
 port.postMessage({ type: 3 });
 
-injectCookieHijack();
-injectTitleHijack();
-
-function injectTitleHijack() {
-  const script = document.createElement("script");
-  script.textContent = `(() => {
-    let originalTitle = document.title;
-    const event = CustomEvent;
-
-    document.__defineSetter__("title", function(t) {
-      originalTitle = t;
-      document.dispatchEvent(new event("9", { detail: t }));
-    });
-
-    document.__defineGetter__("title", function() {
-      return originalTitle;
-    });
-  })();`;
-  document.documentElement.appendChild(script);
-  script.remove();
-}
-
-function injectCookieHijack() {
-  const script = document.createElement("script");
-  script.textContent = `(() => {
-    const event = CustomEvent;
-
-    document.__defineSetter__("cookie", function(c) {
-      document.dispatchEvent(new event("7", { detail: c }));
-    });
-
-    document.__defineGetter__("cookie", function() {
-      document.dispatchEvent(new event("8"));
-      let result;
-      try {
-        result = localStorage.getItem("@@@cookies");
-        localStorage.removeItem("@@@cookies");
-      } catch (e) {
-        result = document.getElementById("@@@cookies")?.innerText || "";
-      }
-      return result;
-    });
-  })();`;
-  document.documentElement.appendChild(script);
-  script.remove();
-}
+chrome.runtime.sendMessage({ type: "inject_cookie_script" });
 
 function setProfile(profile) {
   profilePrefix = profile;
@@ -125,7 +82,6 @@ function updateTitle(t) {
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 5) {
-    injectTitleHijack();
     updateTitle(document.title);
   }
   if (msg.type === "3") {

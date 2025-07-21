@@ -48,6 +48,15 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg.type === "inject_cookie_script" && sender.tab?.id) {
+    chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      files: ["inject.js"]
+    });
+  }
+});
+
 chrome.webNavigation.onCompleted.addListener(({ tabId, url }) => {
   const profile = tabProfiles[tabId];
   if (!profile || !profileCookies[profile]) return;
