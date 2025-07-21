@@ -1,157 +1,72 @@
-// Refactored for Manifest V3 - Service Worker Context
+// background.js (Manifest V3 - Service Worker)
 
-var f = {};
-var g = [];
-var l = [];
-var n=0;
-m("");
-if (!chrome.action || !chrome.action.onClicked) {
-    console.error("chrome.action API is not available. Check your manifest and Chrome version.");
-}
-chrome.runtime.onStartup.addListener(() => {
-    chrome.action.onClicked.addListener(() => {
-        n = typeof n === 'number' ? n + 1 : 1;
-        chrome.storage.sync.set({ use: n });
-        chrome.tabs.create({}, function (props) {
-            p(props.id, props.id + "_@@@_");
-        });
-    });
-});
-var q, n, r, s, t, u;
+const tabProfiles = {}; // tabId -> profile
+const profileCookies = {}; // profile -> array of cookies
 
-chrome.runtime.onInstalled.addListener(function (details) {
-    chrome.storage.sync.get(["date", "use", "uid"], function (data) {
-        q = data.date || (new Date).getTime();
-        n = data.use || 0;
-        r = data.uid || w();
-        chrome.storage.sync.set({ date: q, use: n, uid: r });
-    });
-
-    chrome.storage.local.get(["mid", "orgVersion", "install"], function (data) {
-        s = data.mid || w();
-        t = data.orgVersion || chrome.runtime.getManifest().version;
-        u = data.install;
-        chrome.storage.local.set({ mid: s, orgVersion: t });
-
-        chrome.storage.sync.get(function () {
-            x(details);
-        });
-    });
-});
-
-function x(args) {
-    if ("update" === args.reason) {
-        if (args.previousVersion !== chrome.runtime.getManifest().version) {
-            // Handle update logic
-        }
-    }
-    if ("install" === args.reason && !u) {
-        chrome.tabs.query({ url: "https://chrome.google.com/webstore*" }, function (tabs) {
-            if (tabs && tabs[0]) {
-                var tab = tabs[0];
-                if (tab.openerTabId) {
-                    chrome.tabs.get(tab.openerTabId, function (referrerTab) {
-                        // handle install with referrer
-                    });
-                } else {
-                    // handle install
-                }
-            }
-        });
-    }
-}
-
-function w() {
-    return ("000000000000" + (Math.random() * Math.pow(36, 12)).toString(36)).substr(-12);
-}
-
-function m(value) {
-    chrome.cookies.getAll({}, function (cookies) {
-        cookies.forEach(function (cookie) {
-            var name = cookie.name;
-            if (!(value === null && name.indexOf("@@@") > 0)) {
-                if (!(value === "" && name.indexOf("@@@") === -1)) {
-                    if (!(value && name.substring(0, value.length) !== value)) {
-                        chrome.cookies.remove({
-                            url: (cookie.secure ? "https://" : "http://") + cookie.domain + cookie.path,
-                            name: name
-                        });
-                    }
-                }
-            }
-        });
-    });
-}
-
-function A(key) {
-    if (key > 0) {
-        return f[key] || !g[key] ? "" : g[key];
-    }
-}
-
-function p(tabId, profileId) {
-    if (profileId) {
-        g[tabId] = profileId;
-        B(tabId, profileId);
-    }
-}
-
-function B(tabId, profileId) {
-    if (typeof profileId !== "undefined") {
-        var badge = {
-            text: profileId.substr(0, profileId.indexOf("_@@@_")),
-            tabId: tabId
-        };
-        chrome.action.setBadgeBackgroundColor({
-            color: "#006600",
-            tabId: tabId
-        });
-        chrome.action.setBadgeText(badge);
-    }
-}
-
-function F(info) {
-    var url = info.pageUrl || info.linkUrl;
-    chrome.tabs.create({ url: url }, function (tab) {
-        p(tab.id, tab.id + "_@@@_");
-    });
-}
-
-chrome.contextMenus.create({
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
     id: "duplicatePageNewIdentity",
     title: "Duplicate Page in New Identity",
     contexts: ["page", "image"]
-});
+  });
 
-chrome.contextMenus.create({
+  chrome.contextMenus.create({
     id: "openLinkNewIdentity",
     title: "Open Link in New Identity",
     contexts: ["link"]
+  });
 });
 
-// Add context menu click handler
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === "duplicatePageNewIdentity" || info.menuItemId === "openLinkNewIdentity") {
-        const url = info.linkUrl || info.pageUrl;
-        chrome.tabs.create({ url: url }, function (tab) {
-            p(tab.id, tab.id + "_@@@_");
-        });
-    }
+  const url = info.linkUrl || info.pageUrl;
+  chrome.tabs.create({ url }, newTab => {
+    const profileId = `${newTab.id}_@@@_`;
+    tabProfiles[newTab.id] = profileId;
+    updateBadge(newTab.id, profileId);
+  });
 });
 
-chrome.runtime.onConnect.addListener(function (port) {
-    port.onMessage.addListener(function (msg) {
-        if (msg.type === 3 && port.sender.tab) {
-            port.postMessage({
-                type: 4,
-                profile: A(port.sender.tab.id)
-            });
-        }
+chrome.runtime.onConnect.addListener(port => {
+  port.onMessage.addListener((msg) => {
+    if (msg.type === 3 && port.sender.tab) {
+      const tabId = port.sender.tab.id;
+      let profile = tabProfiles[tabId];
+      if (!profile) {
+        profile = `${tabId}_@@@_`;
+        tabProfiles[tabId] = profile;
+      }
+      port.postMessage({ type: 4, profile });
+    }
+  });
+});
+
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg.type === "storeCookies" && sender.tab) {
+    const profile = tabProfiles[sender.tab.id];
+    if (!profile) return;
+    profileCookies[profile] = msg.cookies;
+  }
+});
+
+chrome.webNavigation.onCompleted.addListener(({ tabId, url }) => {
+  const profile = tabProfiles[tabId];
+  if (!profile || !profileCookies[profile]) return;
+  for (const cookie of profileCookies[profile]) {
+    chrome.cookies.set({
+      url,
+      name: cookie.name,
+      value: cookie.value,
+      path: "/"
     });
+  }
+}, { url: [{ urlMatches: '.*' }] });
+
+chrome.tabs.onRemoved.addListener(tabId => {
+  delete tabProfiles[tabId];
 });
 
-chrome.webNavigation.onDOMContentLoaded.addListener(function (details) {
-    if (details.tabId > -1 && details.frameId === 0) {
-        chrome.tabs.sendMessage(details.tabId, { type: 5 });
-    }
-}, { urls: ["http://*/*", "https://*/*"] });
+function updateBadge(tabId, profileId) {
+  const label = profileId.split("_@@@_")[0];
+  chrome.action.setBadgeBackgroundColor({ color: "#006600", tabId });
+  chrome.action.setBadgeText({ text: label, tabId });
+}

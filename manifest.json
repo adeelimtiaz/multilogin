@@ -1,7 +1,8 @@
+// manifest.json
 {
   "manifest_version": 3,
   "name": "Multi Login",
-  "version": "1.0",
+  "version": "2.0",
   "description": "Log into multiple accounts on the same site simultaneously.",
   "action": {
     "default_icon": "icon_128.png",
@@ -18,15 +19,13 @@
       "run_at": "document_start"
     }
   ],
-   "permissions": [
-      "contextMenus",
-      "cookies",
-      "storage",
-      "tabs",
-      "webNavigation",
-      "declarativeNetRequest",
-      "declarativeNetRequestWithHostAccess"
-   ],
+  "permissions": [
+    "contextMenus",
+    "cookies",
+    "storage",
+    "tabs",
+    "scripting"
+  ],
   "host_permissions": [
     "http://*/*",
     "https://*/*"
