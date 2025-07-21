@@ -118,14 +118,25 @@ function F(info) {
 }
 
 chrome.contextMenus.create({
+    id: "duplicatePageNewIdentity",
     title: "Duplicate Page in New Identity",
-    contexts: ["page", "image"],
-    onclick: F
+    contexts: ["page", "image"]
 });
+
 chrome.contextMenus.create({
+    id: "openLinkNewIdentity",
     title: "Open Link in New Identity",
-    contexts: ["link"],
-    onclick: F
+    contexts: ["link"]
+});
+
+// Add context menu click handler
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === "duplicatePageNewIdentity" || info.menuItemId === "openLinkNewIdentity") {
+        const url = info.linkUrl || info.pageUrl;
+        chrome.tabs.create({ url: url }, function (tab) {
+            p(tab.id, tab.id + "_@@@_");
+        });
+    }
 });
 
 chrome.runtime.onConnect.addListener(function (port) {
