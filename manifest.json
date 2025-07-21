@@ -18,15 +18,15 @@
       "run_at": "document_start"
     }
   ],
-  "permissions": [
-    "contextMenus",
-    "cookies",
-    "storage",
-    "tabs",
-    "webRequest",
-    "webRequestBlocking",
-    "webNavigation"
-  ],
+   "permissions": [
+      "contextMenus",
+      "cookies",
+      "storage",
+      "tabs",
+      "webNavigation",
+      "declarativeNetRequest",
+      "declarativeNetRequestWithHostAccess"
+   ],
   "host_permissions": [
     "http://*/*",
     "https://*/*"

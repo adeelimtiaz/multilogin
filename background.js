@@ -3,12 +3,18 @@
 var f = {};
 var g = [];
 var l = [];
+var n=0;
 m("");
-chrome.action.onClicked.addListener(function () {
-    n++;
-    chrome.storage.sync.set({ use: n });
-    chrome.tabs.create({}, function (props) {
-        p(props.id, props.id + "_@@@_");
+if (!chrome.action || !chrome.action.onClicked) {
+    console.error("chrome.action API is not available. Check your manifest and Chrome version.");
+}
+chrome.runtime.onStartup.addListener(() => {
+    chrome.action.onClicked.addListener(() => {
+        n = typeof n === 'number' ? n + 1 : 1;
+        chrome.storage.sync.set({ use: n });
+        chrome.tabs.create({}, function (props) {
+            p(props.id, props.id + "_@@@_");
+        });
     });
 });
 var q, n, r, s, t, u;
