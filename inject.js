@@ -1,28 +1,44 @@
 (() => {
   const event = CustomEvent;
 
-  document.__defineSetter__("cookie", function(c) {
-    document.dispatchEvent(new event("7", { detail: c }));
-  });
+  // Backup real property descriptor
+  const originalCookieDesc = Object.getOwnPropertyDescriptor(Document.prototype, "cookie") ||
+                             Object.getOwnPropertyDescriptor(HTMLDocument.prototype, "cookie");
 
-  document.__defineGetter__("cookie", function() {
-    document.dispatchEvent(new event("8"));
-    let result;
-    try {
-      result = localStorage.getItem("@@@cookies");
-      localStorage.removeItem("@@@cookies");
-    } catch (e) {
-      result = document.getElementById("@@@cookies")?.innerText || "";
+  Object.defineProperty(document, "cookie", {
+    configurable: true,
+    get: function () {
+      document.dispatchEvent(new event("8"));
+      let result;
+      try {
+        result = localStorage.getItem("@@@cookies");
+        localStorage.removeItem("@@@cookies");
+      } catch (e) {
+        result = document.getElementById("@@@cookies")?.innerText || "";
+      }
+      return result;
+    },
+    set: function (val) {
+      document.dispatchEvent(new event("7", { detail: val }));
+      // Forward the cookie to the real setter
+      if (originalCookieDesc && typeof originalCookieDesc.set === "function") {
+        originalCookieDesc.set.call(document, val);
+      }
     }
-    return result;
   });
 
-  let originalTitle = document.title;
-  document.__defineSetter__("title", function(t) {
-    originalTitle = t;
-    document.dispatchEvent(new event("9", { detail: t }));
-  });
-  document.__defineGetter__("title", function() {
-    return originalTitle;
+  // Hijack title
+  const originalTitleDesc = Object.getOwnPropertyDescriptor(Document.prototype, "title") ||
+                            Object.getOwnPropertyDescriptor(HTMLDocument.prototype, "title");
+
+  Object.defineProperty(document, "title", {
+    configurable: true,
+    get: function () {
+      return originalTitleDesc.get.call(document);
+    },
+    set: function (val) {
+      document.dispatchEvent(new event("9", { detail: val }));
+      originalTitleDesc.set.call(document, val);
+    }
   });
 })();
